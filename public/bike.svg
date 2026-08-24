@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="#0ea5e9">
+  <!-- Mountain Bike Silhouette -->
+  <!-- Frame -->
+  <path d="M120 280 L220 180 L350 180 L280 320 Z" fill="none" stroke="#0ea5e9" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M220 180 L200 350" stroke="#0ea5e9" stroke-width="15" stroke-linecap="round"/>
+  <!-- Front fork -->
+  <path d="M350 180 L420 350" stroke="#0ea5e9" stroke-width="15" stroke-linecap="round"/>
+  <!-- Handlebars -->
+  <path d="M350 180 L330 140 L380 130" stroke="#0ea5e9" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Seat -->
+  <path d="M220 180 L210 140 M180 140 L240 140" stroke="#27272a" stroke-width="20" stroke-linecap="round"/>
+  <!-- Wheels -->
+  <circle cx="120" cy="350" r="100" fill="none" stroke="#27272a" stroke-width="20"/>
+  <circle cx="420" cy="350" r="100" fill="none" stroke="#27272a" stroke-width="20"/>
+  <!-- Spokes -->
+  <path d="M120 250 L120 450 M20 350 L220 350 M50 280 L190 420 M50 420 L190 280" stroke="#94a3b8" stroke-width="2"/>
+  <path d="M420 250 L420 450 M320 350 L520 350 M350 280 L490 420 M350 420 L490 280" stroke="#94a3b8" stroke-width="2"/>
+  <!-- Gears and chain -->
+  <circle cx="200" cy="350" r="30" fill="none" stroke="#475569" stroke-width="10"/>
+  <path d="M120 350 L200 320 M120 350 L200 380" stroke="#475569" stroke-width="5"/>
+</svg>
