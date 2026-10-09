@@ -48,9 +48,13 @@ export default function WishlistPage() {
             animate={{ opacity: 1, y: 0 }}
             className="flex flex-col items-center justify-center py-20 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm"
           >
-            <div className="w-24 h-24 bg-red-50 dark:bg-red-950/30 rounded-full flex items-center justify-center mb-6">
+            <motion.div 
+              className="w-24 h-24 bg-red-50 dark:bg-red-950/30 rounded-full flex items-center justify-center mb-6 cursor-pointer"
+              whileHover={{ scale: 1.1, rotate: 10 }}
+              transition={{ type: "spring", stiffness: 400, damping: 10 }}
+            >
               <Heart className="h-12 w-12 text-red-300 dark:text-red-700" />
-            </div>
+            </motion.div>
             <h2 className="text-2xl font-bold mb-3 text-zinc-900 dark:text-white">You have no saved items</h2>
             <p className="text-zinc-500 mb-8 max-w-md text-center">
               Save your favorite items here so you can easily find them later and add them to your cart.
@@ -73,6 +77,7 @@ export default function WishlistPage() {
                 category={product.category}
                 imageUrl={product.imageUrl}
                 isNew={product.isNew}
+                stock={product.stock}
               />
             ))}
           </div>

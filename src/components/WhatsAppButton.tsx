@@ -14,8 +14,8 @@ export function WhatsAppButton() {
     return null;
   }
 
-  // Using the real number
-  const phoneNumber = "94771234567";
+  // Using the real number from env or fallback
+  const phoneNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "94771234567";
   const message = encodeURIComponent("Hello! I am interested in your products.");
   const whatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`;
 

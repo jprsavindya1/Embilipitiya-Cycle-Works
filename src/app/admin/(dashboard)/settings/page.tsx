@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Save, Store, Mail, Phone, MapPin, DollarSign, Percent } from "lucide-react";
+import { Save, Store, Mail, Phone, MapPin, DollarSign, Percent, AlertTriangle } from "lucide-react";
 
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState({
@@ -11,6 +11,11 @@ export default function AdminSettingsPage() {
     address: "",
     currency: "LKR",
     tax_rate: "0",
+    low_stock_threshold: "10",
+    announcement_text: "",
+    announcement_enabled: "false",
+    smtp_email: "",
+    smtp_password: "",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -40,7 +45,7 @@ export default function AdminSettingsPage() {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setSettings(prev => ({ ...prev, [name]: value }));
   };
@@ -160,6 +165,45 @@ export default function AdminSettingsPage() {
           </div>
         </div>
 
+        {/* Email & SMTP Settings */}
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
+          <div className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 px-6 py-4">
+            <h3 className="text-lg font-bold">Email & SMTP Configuration</h3>
+            <p className="text-sm text-zinc-500 mt-1">Configure the email address used to send order confirmations and system alerts to customers.</p>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold mb-1 text-zinc-700 dark:text-zinc-300">SMTP Email Address</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 w-5 h-5" />
+                  <input 
+                    type="email" 
+                    name="smtp_email"
+                    value={settings.smtp_email}
+                    onChange={handleChange}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus:ring-2 focus:ring-[var(--color-brand-primary)] outline-none transition-all"
+                    placeholder="e.g. yourstore@gmail.com"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1 text-zinc-700 dark:text-zinc-300">App Password / SMTP Password</label>
+                <div className="relative">
+                  <input 
+                    type="password" 
+                    name="smtp_password"
+                    value={settings.smtp_password}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus:ring-2 focus:ring-[var(--color-brand-primary)] outline-none transition-all"
+                    placeholder="Enter 16-character App Password"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Currency & Tax */}
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
           <div className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 px-6 py-4">
@@ -203,12 +247,78 @@ export default function AdminSettingsPage() {
           </div>
         </div>
 
+        {/* Inventory Settings */}
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
+          <div className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 px-6 py-4">
+            <h3 className="text-lg font-bold">Inventory Settings</h3>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold mb-1 text-zinc-700 dark:text-zinc-300">Low Stock Alert Threshold</label>
+                <div className="relative">
+                  <AlertTriangle className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400 w-5 h-5" />
+                  <input 
+                    type="number" 
+                    name="low_stock_threshold"
+                    value={settings.low_stock_threshold}
+                    onChange={handleChange}
+                    min="0"
+                    step="1"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                    placeholder="10"
+                  />
+                </div>
+                <p className="text-xs text-zinc-500 mt-2">
+                  You will receive an alert on the dashboard when a product's stock falls to or below this number.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Promotions & Announcements */}
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
+          <div className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 px-6 py-4">
+            <h3 className="text-lg font-bold">Promotions & Announcements</h3>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="flex items-center justify-between p-4 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50/50 dark:bg-zinc-950/30">
+              <div>
+                <label className="block text-sm font-semibold mb-1 text-zinc-700 dark:text-zinc-300">Enable Top Announcement Bar</label>
+                <p className="text-sm text-zinc-500">Show a promotional message at the very top of the website.</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                <input 
+                  type="checkbox" 
+                  name="announcement_enabled" 
+                  checked={settings.announcement_enabled === "true"}
+                  onChange={(e) => setSettings(prev => ({ ...prev, announcement_enabled: e.target.checked ? "true" : "false" }))}
+                  className="sr-only peer" 
+                />
+                <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[var(--color-brand-primary)]/20 dark:peer-focus:ring-[var(--color-brand-primary)]/30 rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-[var(--color-brand-primary)]"></div>
+              </label>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold mb-1 text-zinc-700 dark:text-zinc-300">Announcement Text</label>
+              <textarea 
+                name="announcement_text"
+                value={settings.announcement_text}
+                onChange={handleChange}
+                className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus:ring-2 focus:ring-[var(--color-brand-primary)] outline-none transition-all resize-y min-h-[80px]"
+                placeholder="🎉 Grand Opening! Use code ECW10 at checkout for 10% off!"
+              ></textarea>
+            </div>
+          </div>
+        </div>
+
         {/* Action Bar */}
         <div className="flex justify-end pt-4">
           <button 
             type="submit" 
             disabled={saving}
-            className="flex items-center gap-2 bg-[var(--color-brand-primary)] hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold transition-colors shadow-sm disabled:opacity-50"
+            className="flex items-center justify-center gap-2 bg-[var(--color-brand-primary)] text-white px-8 py-3 rounded-xl hover:bg-opacity-90 transition-all font-semibold shadow-md disabled:opacity-70"
           >
             <Save className="w-5 h-5" />
             {saving ? 'Saving Changes...' : 'Save Settings'}

@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
     try {
       const decoded: any = jwt.verify(token.value, JWT_SECRET);
-      if (decoded.role !== 'admin') {
+      if (decoded.role !== 'super_admin' && decoded.role !== 'staff') {
         console.log('Admin API Error: Token role is not admin:', decoded);
         return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
       }

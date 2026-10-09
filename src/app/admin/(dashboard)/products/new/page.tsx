@@ -9,7 +9,7 @@ import { useStore, Product } from "@/store/useStore";
 
 export default function AddProductPage() {
   const router = useRouter();
-  const { addProduct } = useStore();
+  const { addProduct, categories } = useStore();
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [images, setImages] = useState<string[]>([]);
@@ -165,14 +165,25 @@ export default function AddProductPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-semibold">Category <span className="text-red-500">*</span></label>
-                  <input 
-                    type="text" 
+                  <select
                     required
                     value={formData.category}
                     onChange={e => setFormData({...formData, category: e.target.value})}
-                    placeholder="e.g. Electronics, Clothing"
                     className="w-full px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 focus:ring-2 focus:ring-[var(--color-brand-primary)] focus:border-transparent outline-none"
-                  />
+                  >
+                    <option value="" disabled>Select a category</option>
+                    {categories.map(cat => {
+                      const subcats = Array.isArray(cat.subcategories) ? cat.subcategories : (typeof cat.subcategories === 'string' ? JSON.parse(cat.subcategories) : []);
+                      return (
+                        <optgroup key={cat.id} label={cat.name}>
+                          <option value={cat.name}>{cat.name} (Parent)</option>
+                          {subcats.map((sub: string) => (
+                            <option key={`${cat.id}-${sub}`} value={sub}>{sub}</option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
+                  </select>
                 </div>
               </div>
             </div>

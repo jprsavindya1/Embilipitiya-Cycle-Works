@@ -8,9 +8,16 @@ export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Modals / Expanded views
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  
+  const [trackingModalOrder, setTrackingModalOrder] = useState<any>(null);
+  const [courier, setCourier] = useState('');
+  const [trackingNumber, setTrackingNumber] = useState('');
+  const [trackingLink, setTrackingLink] = useState('');
+
 
   useEffect(() => {
     fetchOrders();
@@ -34,15 +41,20 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const updateStatus = async (orderId: number, type: 'order_status' | 'payment_status', newValue: string) => {
+  const updateStatus = async (orderId: number, type: 'order_status' | 'payment_status', newValue: string, extraData?: any) => {
     try {
-      // Optimistic update
-      setOrders(orders.map(o => o.id === orderId ? { ...o, [type]: newValue } : o));
+      // Optimistic update (skip if we are shipping, to wait for actual data)
+      if (newValue !== 'Shipped' || type !== 'order_status') {
+        setOrders(orders.map(o => o.id === orderId ? { ...o, [type]: newValue } : o));
+        if (selectedOrder && selectedOrder.id === orderId) {
+          setSelectedOrder({ ...selectedOrder, [type]: newValue });
+        }
+      }
 
       const res = await fetch(`/api/admin/orders/ORD-${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [type]: newValue })
+        body: JSON.stringify({ [type]: newValue, ...extraData })
       });
 
       if (!res.ok) {
@@ -50,11 +62,39 @@ export default function AdminOrdersPage() {
         fetchOrders();
         throw new Error('Failed to update status');
       }
+
+      if (newValue === 'Shipped') {
+        setOrders(orders.map(o => o.id === orderId ? { ...o, [type]: newValue, courier: extraData?.courier, tracking_number: extraData?.tracking_number, tracking_link: extraData?.tracking_link } : o));
+        if (selectedOrder && selectedOrder.id === orderId) {
+          setSelectedOrder({ ...selectedOrder, [type]: newValue, courier: extraData?.courier, tracking_number: extraData?.tracking_number, tracking_link: extraData?.tracking_link });
+        }
+      }
+
     } catch (err) {
       console.error(err);
       alert('Error updating status');
     }
   };
+
+  const handleOrderStatusChange = (order: any, newValue: string) => {
+    if (newValue === 'Shipped') {
+      setTrackingModalOrder(order);
+      setCourier(order.courier || '');
+      setTrackingNumber(order.tracking_number || '');
+      setTrackingLink(order.tracking_link || '');
+    } else {
+      updateStatus(order.id, 'order_status', newValue);
+    }
+  };
+
+  const handleShippingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trackingModalOrder) return;
+    
+    await updateStatus(trackingModalOrder.id, 'order_status', 'Shipped', { courier, tracking_number: trackingNumber, tracking_link: trackingLink });
+    setTrackingModalOrder(null);
+  };
+
 
   const downloadCSV = () => {
     if (orders.length === 0) return;
@@ -102,14 +142,26 @@ export default function AdminOrdersPage() {
           <p className="text-zinc-500 mt-1">Manage and track customer orders.</p>
         </div>
         
-        <button 
-          onClick={downloadCSV}
-          disabled={orders.length === 0}
-          className="flex items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-900 dark:text-white px-4 py-2 rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-        >
-          <Download className="w-4 h-4" />
-          Export CSV
-        </button>
+        <div className="flex items-center gap-4 w-full md:w-auto mt-4 md:mt-0">
+          <div className="relative flex-grow md:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+            <input 
+              type="text" 
+              placeholder="Search ID, Name or Phone..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:border-[var(--color-brand-primary)] text-sm"
+            />
+          </div>
+          <button 
+            onClick={downloadCSV}
+            disabled={orders.length === 0}
+            className="flex items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-900 dark:text-white px-4 py-2 rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shrink-0 text-sm"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
+        </div>
       </div>
 
       {/* Orders Table */}
@@ -128,12 +180,19 @@ export default function AdminOrdersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-              {orders.map((order) => (
+              {orders
+                .filter(o => 
+                  o.first_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                  o.last_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                  (o.phone && o.phone.includes(searchQuery)) || 
+                  `ORD-${o.id}`.toLowerCase().includes(searchQuery.toLowerCase())
+                )
+                .map((order) => (
                 <tr key={order.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
                   <td className="px-6 py-4 font-bold">ORD-{order.id}</td>
                   <td className="px-6 py-4">
                     <div className="font-medium">{order.first_name} {order.last_name}</div>
-                    <div className="text-xs text-zinc-500">{order.email}</div>
+                    <div className="text-xs text-zinc-500">{order.phone}</div>
                   </td>
                   <td className="px-6 py-4 text-zinc-500">
                     {new Date(order.created_at).toLocaleDateString()}
@@ -142,42 +201,32 @@ export default function AdminOrdersPage() {
                     Rs. {Number(order.total).toLocaleString()}
                   </td>
                   
-                  {/* Payment Status Dropdown */}
+                  {/* Payment Status Badge */}
                   <td className="px-6 py-4">
-                    <select 
-                      value={order.payment_status}
-                      onChange={(e) => updateStatus(order.id, 'payment_status', e.target.value)}
-                      className={`text-xs font-bold rounded-full px-3 py-1 outline-none border cursor-pointer appearance-none text-center min-w-[90px]
-                        ${order.payment_status === 'Paid' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20' : ''}
-                        ${order.payment_status === 'Pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-500/10 dark:text-yellow-400 dark:border-yellow-500/20' : ''}
-                        ${order.payment_status === 'Failed' || order.payment_status === 'Canceled' ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20' : ''}
+                    <span 
+                      className={`text-xs font-bold rounded-full px-3 py-1 text-center inline-block min-w-[80px]
+                        ${order.payment_status === 'Paid' ? 'bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400' : ''}
+                        ${order.payment_status === 'Pending' ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-400' : ''}
+                        ${order.payment_status === 'Failed' || order.payment_status === 'Canceled' ? 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400' : ''}
                       `}
                     >
-                      <option value="Pending">Pending</option>
-                      <option value="Paid">Paid</option>
-                      <option value="Failed">Failed</option>
-                      <option value="Canceled">Canceled</option>
-                    </select>
+                      {order.payment_status}
+                    </span>
                   </td>
 
-                  {/* Order Status Dropdown */}
+                  {/* Order Status Badge */}
                   <td className="px-6 py-4">
-                    <select 
-                      value={order.order_status || 'Pending'}
-                      onChange={(e) => updateStatus(order.id, 'order_status', e.target.value)}
-                      className={`text-xs font-bold rounded-full px-3 py-1 outline-none border cursor-pointer appearance-none text-center min-w-[100px]
-                        ${order.order_status === 'Delivered' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' : ''}
-                        ${order.order_status === 'Shipped' ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20' : ''}
-                        ${order.order_status === 'Processing' ? 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20' : ''}
-                        ${!order.order_status || order.order_status === 'Pending' ? 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700' : ''}
+                    <span 
+                      className={`text-xs font-bold rounded-full px-3 py-1 text-center inline-block min-w-[90px]
+                        ${order.order_status === 'Delivered' ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400' : ''}
+                        ${order.order_status === 'Shipped' ? 'bg-purple-50 text-purple-700 dark:bg-purple-500/10 dark:text-purple-400' : ''}
+                        ${order.order_status === 'Processing' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400' : ''}
+                        ${!order.order_status || order.order_status === 'Pending' ? 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400' : ''}
+                        ${order.order_status === 'Canceled' ? 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400' : ''}
                       `}
                     >
-                      <option value="Pending">Pending</option>
-                      <option value="Processing">Processing</option>
-                      <option value="Shipped">Shipped</option>
-                      <option value="Delivered">Delivered</option>
-                      <option value="Canceled">Canceled</option>
-                    </select>
+                      {order.order_status || 'Pending'}
+                    </span>
                   </td>
 
                   <td className="px-6 py-4 text-right">
@@ -326,7 +375,115 @@ export default function AdminOrdersPage() {
                   </div>
                 </div>
 
+                {/* Status Update Actions */}
+                <div className="border-t border-zinc-200 dark:border-zinc-800 pt-6 bg-zinc-50 dark:bg-zinc-950/50 -mx-6 -mb-6 p-6 rounded-b-3xl">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-4">Update Order Status</h3>
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex-1">
+                      <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">Payment Status</label>
+                      <div className="relative">
+                        <select 
+                          value={selectedOrder.payment_status}
+                          onChange={(e) => updateStatus(selectedOrder.id, 'payment_status', e.target.value)}
+                          className="w-full appearance-none h-11 px-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:border-[var(--color-brand-primary)] font-medium text-sm"
+                        >
+                          <option value="Pending">Pending</option>
+                          <option value="Paid">Paid</option>
+                          <option value="Failed">Failed</option>
+                          <option value="Canceled">Canceled</option>
+                        </select>
+                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1">
+                      <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">Fulfillment Status</label>
+                      <div className="relative">
+                        <select 
+                          value={selectedOrder.order_status || 'Pending'}
+                          onChange={(e) => handleOrderStatusChange(selectedOrder, e.target.value)}
+                          className="w-full appearance-none h-11 px-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:border-[var(--color-brand-primary)] font-medium text-sm"
+                        >
+                          <option value="Pending">Pending</option>
+                          <option value="Processing">Processing</option>
+                          <option value="Shipped">Shipped</option>
+                          <option value="Delivered">Delivered</option>
+                          <option value="Canceled">Canceled</option>
+                        </select>
+                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Tracking Info Modal */}
+      <AnimatePresence>
+        {trackingModalOrder && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white dark:bg-zinc-900 rounded-3xl w-full max-w-md shadow-2xl border border-zinc-200 dark:border-zinc-800"
+            >
+              <div className="border-b border-zinc-200 dark:border-zinc-800 px-6 py-4 flex justify-between items-center">
+                <h2 className="text-xl font-bold">Shipping Details</h2>
+                <button onClick={() => setTrackingModalOrder(null)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <form onSubmit={handleShippingSubmit} className="p-6 space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-zinc-700 dark:text-zinc-300">Courier Name</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={courier}
+                    onChange={e => setCourier(e.target.value)}
+                    placeholder="e.g. PromptX, Koombiyo"
+                    className="w-full h-11 px-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:border-[var(--color-brand-primary)]"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-zinc-700 dark:text-zinc-300">Tracking Number</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={trackingNumber}
+                    onChange={e => setTrackingNumber(e.target.value)}
+                    placeholder="e.g. 123456789"
+                    className="w-full h-11 px-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:border-[var(--color-brand-primary)]"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-zinc-700 dark:text-zinc-300">Tracking Link (URL)</label>
+                  <input 
+                    type="url" 
+                    value={trackingLink}
+                    onChange={e => setTrackingLink(e.target.value)}
+                    placeholder="e.g. https://domex.lk/tracking?id=123"
+                    className="w-full h-11 px-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:border-[var(--color-brand-primary)]"
+                  />
+                </div>
+                <p className="text-xs text-zinc-500 mt-2">
+                  Submitting this will mark the order as Shipped and automatically send an email to the customer with these tracking details.
+                </p>
+                <div className="pt-4 flex gap-3">
+                  <button type="button" onClick={() => setTrackingModalOrder(null)} className="flex-1 px-4 py-3 border border-zinc-200 dark:border-zinc-800 rounded-xl font-bold hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
+                    Cancel
+                  </button>
+                  <button type="submit" className="flex-1 px-4 py-3 bg-[var(--color-brand-primary)] text-white rounded-xl font-bold hover:bg-[var(--color-brand-primary-dark)] transition-colors">
+                    Mark as Shipped
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </div>
         )}

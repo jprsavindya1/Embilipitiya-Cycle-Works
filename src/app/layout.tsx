@@ -15,6 +15,8 @@ export const metadata: Metadata = {
   description: "Premium e-commerce platform for bicycles and accessories.",
 };
 
+import { TopAnnouncementBar } from "@/components/TopAnnouncementBar";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -34,6 +36,7 @@ export default function RootLayout({
           enableSystem={false}
           disableTransitionOnChange
         >
+          <TopAnnouncementBar />
           {children}
           <WhatsAppButton />
         </ThemeProvider>

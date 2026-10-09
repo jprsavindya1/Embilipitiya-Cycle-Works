@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     if (!token) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     
     const decoded: any = jwt.verify(token.value, JWT_SECRET);
-    if (decoded.role !== 'admin') return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+    if (decoded.role !== 'super_admin' && decoded.role !== 'staff') return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
 
     const connection = await pool.getConnection();
     const [rows]: any = await connection.execute('SELECT setting_key, setting_value FROM settings');
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     if (!token) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     
     const decoded: any = jwt.verify(token.value, JWT_SECRET);
-    if (decoded.role !== 'admin') return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+    if (decoded.role !== 'super_admin' && decoded.role !== 'staff') return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
 
     const body = await request.json();
     const { settings } = body; // expecting { settings: { store_name: '...', contact_email: '...' } }

@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ShoppingBag, Heart } from "lucide-react";
+import { ShoppingBag, ShoppingCart, Heart } from "lucide-react";
 import { Button } from "./Button";
 import { useStore } from "@/store/useStore";
 
@@ -14,9 +14,10 @@ interface ProductCardProps {
   category: string;
   imageUrl: string;
   isNew?: boolean;
+  stock?: number;
 }
 
-export function ProductCard({ id, name, price, category, imageUrl, isNew }: ProductCardProps) {
+export function ProductCard({ id, name, price, category, imageUrl, isNew, stock }: ProductCardProps) {
   const { addToCart, toggleWishlist, wishlist } = useStore();
   const isWishlisted = wishlist.some((item) => item.id === id);
   const [isAdded, setIsAdded] = React.useState(false);
@@ -46,7 +47,12 @@ export function ProductCard({ id, name, price, category, imageUrl, isNew }: Prod
       <div className="relative aspect-[1/1] w-full rounded-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:shadow-xl overflow-hidden mb-4 transition-all duration-300">
         {/* Badges */}
         <div className="absolute top-3 left-3 z-20 flex flex-col gap-2">
-          {isNew && (
+          {stock === 0 && (
+            <span className="bg-red-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-widest shadow-sm">
+              Out of Stock
+            </span>
+          )}
+          {isNew && stock !== 0 && (
             <span className="bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-widest shadow-sm">
               New
             </span>
@@ -75,22 +81,24 @@ export function ProductCard({ id, name, price, category, imageUrl, isNew }: Prod
         </Link>
 
         {/* Quick Add Button (Slide up on hover) */}
-        <div className="absolute bottom-3 left-3 right-3 z-20 translate-y-12 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 ease-out">
-          <Button 
-            className={`w-full rounded-sm h-10 border-none font-bold text-xs tracking-widest uppercase transition-all duration-300 ${
-              isAdded 
-                ? "bg-[var(--color-brand-primary)] text-white hover:bg-[var(--color-brand-primary-dark)]" 
-                : "bg-white/90 text-black hover:bg-[var(--color-brand-primary)] hover:text-white dark:bg-zinc-900/90 dark:text-white dark:hover:bg-[var(--color-brand-primary)]"
-            }`}
-            onClick={handleAddToCart}
-          >
-            {isAdded ? (
-              "Added!"
-            ) : (
-              <><ShoppingBag className="h-4 w-4 mr-2" /> Quick Add</>
-            )}
-          </Button>
-        </div>
+        {stock !== 0 && (
+          <div className="absolute bottom-3 left-3 right-3 z-20 translate-y-12 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 ease-out">
+            <Button 
+              className={`w-full rounded-sm h-10 border-none font-bold text-xs tracking-widest uppercase transition-all duration-300 ${
+                isAdded 
+                  ? "bg-[var(--color-brand-primary)] text-white hover:bg-[var(--color-brand-primary-dark)]" 
+                  : "bg-white/90 text-black hover:bg-[var(--color-brand-primary)] hover:text-white dark:bg-zinc-900/90 dark:text-white dark:hover:bg-[var(--color-brand-primary)]"
+              }`}
+              onClick={handleAddToCart}
+            >
+              {isAdded ? (
+                "Added!"
+              ) : (
+                <><ShoppingCart className="h-4 w-4 mr-2" /> Add to Cart</>
+              )}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Content Area */}

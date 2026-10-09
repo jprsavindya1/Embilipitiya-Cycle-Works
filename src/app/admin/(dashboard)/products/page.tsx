@@ -1,22 +1,57 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Search, Edit, Trash2, X } from "lucide-react";
+import { Plus, Search, Edit, Trash2, X, Eye } from "lucide-react";
 import { Button } from "@/components/Button";
 import { useStore, Product } from "@/store/useStore";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import { useRef } from "react";
+import * as XLSX from "xlsx";
 
 export default function AdminProductsPage() {
-  const { products, addProduct, updateProduct, deleteProduct } = useStore();
+  const { products, addProduct, updateProduct, deleteProduct, categories: storeCategories } = useStore();
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All Categories");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   // Form State
   const [formData, setFormData] = useState<Partial<Product>>({});
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, isMain: boolean = false, index: number = 0) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    const form = new FormData();
+    form.append("file", file);
+
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: form
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        if (isMain) {
+          setFormData(prev => ({ ...prev, imageUrl: data.url }));
+        } else {
+          handleUpdateGalleryUrl(index, data.url);
+        }
+      } else {
+        alert("Upload failed: " + (data.error || "Unknown error"));
+      }
+    } catch (err) {
+      alert("Error uploading image");
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const categories = ["All Categories", ...Array.from(new Set(products.map(p => p.category)))];
 
@@ -27,6 +62,73 @@ export default function AdminProductsPage() {
     
     return matchesSearch && matchesCategory;
   });
+
+  const handleDownloadTemplate = () => {
+    const ws = XLSX.utils.json_to_sheet([{
+      Name: "Sample Product",
+      Price: 15000,
+      Category: "Bicycle",
+      Description: "Sample description...",
+      SKU: "SKU-123",
+      Brand: "Lumala",
+      Stock: 10
+    }]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Products Template");
+    XLSX.writeFile(wb, "ECW_Products_Template.xlsx");
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const bstr = evt.target?.result;
+      const wb = XLSX.read(bstr, { type: 'binary' });
+      const wsname = wb.SheetNames[0];
+      const ws = wb.Sheets[wsname];
+      const data = XLSX.utils.sheet_to_json(ws);
+      
+      let newCount = 0;
+      let updatedCount = 0;
+      data.forEach((row: any) => {
+        if (row.Name && row.Price) {
+          // Check if product exists by SKU or Name
+          const existingProduct = products.find(p => 
+            (row.SKU && p.sku === row.SKU) || 
+            (p.name.toLowerCase() === row.Name.toLowerCase())
+          );
+
+          if (existingProduct) {
+            updateProduct(existingProduct.id, { 
+              stock: Number(row.Stock) || 0,
+              price: Number(row.Price) || existingProduct.price
+            });
+            updatedCount++;
+          } else {
+            const newProduct: Product = {
+              id: `p_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              name: row.Name,
+              price: Number(row.Price) || 0,
+              category: row.Category || "Uncategorized",
+              description: row.Description || "",
+              sku: row.SKU || "",
+              brand: row.Brand || "",
+              stock: Number(row.Stock) || 0,
+              imageUrl: "", 
+              isPublished: false 
+            };
+            addProduct(newProduct);
+            newCount++;
+          }
+        }
+      });
+      alert(`Successfully added ${newCount} new products and updated ${updatedCount} existing products!`);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+    reader.readAsBinaryString(file);
+  };
 
   const handleOpenModal = (product?: Product) => {
     if (product) {
@@ -44,7 +146,8 @@ export default function AdminProductsPage() {
         description: "",
         stock: 10,
         brand: "",
-        sku: `SKU-${Date.now()}`
+        sku: `SKU-${Date.now()}`,
+        isPublished: true
       });
     }
     setIsModalOpen(true);
@@ -117,11 +220,26 @@ export default function AdminProductsPage() {
           <h1 className="text-2xl font-bold tracking-tight">Products</h1>
           <p className="text-sm text-zinc-500">Manage your store's products and inventory.</p>
         </div>
-        <Link href="/admin/products/new">
-          <Button className="shrink-0 rounded-xl font-semibold">
-            <Plus className="h-4 w-4 mr-2" /> Add Product
+        <div className="flex items-center gap-2">
+          <Button variant="outline" className="shrink-0 rounded-xl font-semibold" onClick={handleDownloadTemplate}>
+            Download Template
           </Button>
-        </Link>
+          <input 
+            type="file" 
+            accept=".xlsx, .xls" 
+            ref={fileInputRef} 
+            onChange={handleFileUpload} 
+            className="hidden" 
+          />
+          <Button variant="outline" className="shrink-0 rounded-xl font-semibold" onClick={() => fileInputRef.current?.click()}>
+            Bulk Upload
+          </Button>
+          <Link href="/admin/products/new">
+            <Button className="shrink-0 rounded-xl font-semibold">
+              <Plus className="h-4 w-4 mr-2" /> Add Product
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
@@ -159,6 +277,7 @@ export default function AdminProductsPage() {
                 <th className="px-6 py-4 font-semibold">Category</th>
                 <th className="px-6 py-4 font-semibold">Price</th>
                 <th className="px-6 py-4 font-semibold">Stock</th>
+                <th className="px-6 py-4 font-semibold">Status</th>
                 <th className="px-6 py-4 font-semibold text-right">Actions</th>
               </tr>
             </thead>
@@ -168,7 +287,11 @@ export default function AdminProductsPage() {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-lg overflow-hidden bg-zinc-100 flex-shrink-0">
-                        <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                        {product.imageUrl ? (
+                          <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-zinc-400 text-xs">No Img</div>
+                        )}
                       </div>
                       <div>
                         <div className="font-semibold text-zinc-900 dark:text-zinc-100">{product.name}</div>
@@ -189,8 +312,22 @@ export default function AdminProductsPage() {
                       </span>
                     )}
                   </td>
+                  <td className="px-6 py-4">
+                    {product.isPublished !== false ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                        Published
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                        Draft
+                      </span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      <Link href={`/product/${product.id}`} target="_blank" className="p-2 text-zinc-400 hover:text-[var(--color-brand-primary)] hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors" title="Preview">
+                        <Eye className="h-4 w-4" />
+                      </Link>
                       <button onClick={() => handleOpenModal(product)} className="p-2 text-zinc-400 hover:text-[var(--color-brand-primary)] hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors">
                         <Edit className="h-4 w-4" />
                       </button>
@@ -267,13 +404,25 @@ export default function AdminProductsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-semibold">Category *</label>
-                    <input 
-                      type="text" 
+                    <select 
                       required
                       value={formData.category || ""} 
                       onChange={e => setFormData({...formData, category: e.target.value})}
-                      className="w-full px-3 py-2 border rounded-md dark:bg-zinc-800 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-blue-500" 
-                    />
+                      className="w-full px-3 py-2 border rounded-md dark:bg-zinc-800 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="" disabled>Select a category</option>
+                      {storeCategories.map(cat => {
+                        const subcats = Array.isArray(cat.subcategories) ? cat.subcategories : (typeof cat.subcategories === 'string' ? JSON.parse(cat.subcategories) : []);
+                        return (
+                          <optgroup key={cat.id} label={cat.name}>
+                            <option value={cat.name}>{cat.name} (Parent)</option>
+                            {subcats.map((sub: string) => (
+                              <option key={`${cat.id}-${sub}`} value={sub}>{sub}</option>
+                            ))}
+                          </optgroup>
+                        );
+                      })}
+                    </select>
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-semibold">Stock</label>
@@ -283,6 +432,20 @@ export default function AdminProductsPage() {
                       onChange={e => setFormData({...formData, stock: Number(e.target.value)})}
                       className="w-full px-3 py-2 border rounded-md dark:bg-zinc-800 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-blue-500" 
                     />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold">Status</label>
+                    <select 
+                      value={formData.isPublished === false ? "draft" : "published"} 
+                      onChange={e => setFormData({...formData, isPublished: e.target.value === "published"})}
+                      className="w-full px-3 py-2 border rounded-md dark:bg-zinc-800 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="published">Published</option>
+                      <option value="draft">Draft (Hidden)</option>
+                    </select>
                   </div>
                 </div>
 
@@ -296,14 +459,17 @@ export default function AdminProductsPage() {
                   
                   {/* Main Image */}
                   <div className="flex items-start gap-3">
+                    {formData.imageUrl && (
+                      <div className="w-16 h-16 rounded-md overflow-hidden bg-zinc-100 flex-shrink-0 border border-zinc-200">
+                        <img src={formData.imageUrl} alt="Main Preview" className="w-full h-full object-cover" />
+                      </div>
+                    )}
                     <div className="flex-1 space-y-1">
                       <input 
-                        type="url" 
-                        required
-                        placeholder="Main Image URL"
-                        value={formData.imageUrl || ""} 
-                        onChange={e => setFormData({...formData, imageUrl: e.target.value})}
-                        className="w-full px-3 py-2 border rounded-md dark:bg-zinc-800 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-blue-500" 
+                        type="file" 
+                        accept="image/*"
+                        onChange={e => handleImageUpload(e, true)}
+                        className="w-full text-sm text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" 
                       />
                       <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-2 py-0.5 rounded-sm inline-block">Main Image</span>
                     </div>
@@ -312,19 +478,23 @@ export default function AdminProductsPage() {
                   {/* Gallery Images */}
                   {formData.gallery?.map((url, idx) => (
                     <div key={idx} className="flex items-start gap-3">
+                      {url && (
+                        <div className="w-16 h-16 rounded-md overflow-hidden bg-zinc-100 flex-shrink-0 border border-zinc-200">
+                          <img src={url} alt={`Gallery Preview ${idx}`} className="w-full h-full object-cover" />
+                        </div>
+                      )}
                       <div className="flex-1 space-y-1">
                         <input 
-                          type="url" 
-                          placeholder={`Gallery Image URL ${idx + 1}`}
-                          value={url} 
-                          onChange={e => handleUpdateGalleryUrl(idx, e.target.value)}
-                          className="w-full px-3 py-2 border rounded-md dark:bg-zinc-800 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-blue-500" 
+                          type="file" 
+                          accept="image/*"
+                          onChange={e => handleImageUpload(e, false, idx)}
+                          className="w-full text-sm text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-zinc-100 file:text-zinc-700 hover:file:bg-zinc-200 dark:file:bg-zinc-800 dark:file:text-zinc-300" 
                         />
-                        <div className="flex gap-2">
-                          <button type="button" onClick={() => handleSetMainImage(idx)} className="text-[10px] text-zinc-500 hover:text-blue-500 font-bold uppercase tracking-widest px-2 py-0.5">Set as Main</button>
+                        <div className="flex gap-2 mt-1">
+                          <button type="button" onClick={() => handleSetMainImage(idx)} className="text-[10px] text-zinc-500 hover:text-blue-500 font-bold uppercase tracking-widest px-2 py-0.5 border border-zinc-200 rounded-sm">Set as Main</button>
                         </div>
                       </div>
-                      <button type="button" onClick={() => handleRemoveGalleryUrl(idx)} className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors">
+                      <button type="button" onClick={() => handleRemoveGalleryUrl(idx)} className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors self-center">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
@@ -343,7 +513,7 @@ export default function AdminProductsPage() {
                 
                 <div className="pt-4 flex justify-end gap-3 border-t dark:border-zinc-800">
                   <Button type="button" variant="outline" onClick={handleCloseModal}>Cancel</Button>
-                  <Button type="submit">Save Product</Button>
+                  <Button type="submit" disabled={isUploading}>{isUploading ? 'Uploading...' : 'Save Product'}</Button>
                 </div>
               </form>
             </motion.div>

@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     if (!token) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     
     const decoded: any = jwt.verify(token.value, JWT_SECRET);
-    if (decoded.role !== 'admin') return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+    if (decoded.role !== 'super_admin' && decoded.role !== 'staff') return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
 
     // 2. Fetch Customers
     const connection = await pool.getConnection();
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     if (!token) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     
     const decoded: any = jwt.verify(token.value, JWT_SECRET);
-    if (decoded.role !== 'admin') return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+    if (decoded.role !== 'super_admin' && decoded.role !== 'staff') return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
 
     // 2. Parse Body
     const body = await request.json();

@@ -46,9 +46,10 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
+  const publishedProducts = products.filter(p => p.isPublished !== false);
   const suggestions = query.trim() === ""
-    ? products.slice(0, 5)
-    : products.filter(product => 
+    ? publishedProducts.slice(0, 5)
+    : publishedProducts.filter(product => 
         product.name.toLowerCase().includes(query.toLowerCase()) || 
         product.category.toLowerCase().includes(query.toLowerCase())
       );
@@ -87,6 +88,12 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && query.trim() !== "") {
+                    onClose();
+                    router.push(`/products?search=${encodeURIComponent(query)}`);
+                  }
+                }}
                 placeholder="Search for bicycles, accessories, gym equipment..."
                 className="flex-1 bg-transparent border-none outline-none text-lg text-zinc-900 dark:text-zinc-50 placeholder:text-zinc-400"
               />
@@ -115,7 +122,6 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
                         className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800/50 transition-colors text-left group"
                       >
                         <div className="h-16 w-16 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 flex-shrink-0 relative">
-                          {/* Use img for external placeholder URLs easily */}
                           <img 
                             src={product.imageUrl} 
                             alt={product.name}
@@ -134,6 +140,19 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
                       </button>
                     </li>
                   ))}
+                  {query.trim() !== "" && (
+                    <li className="pt-2">
+                      <button
+                        onClick={() => {
+                          onClose();
+                          router.push(`/products?search=${encodeURIComponent(query)}`);
+                        }}
+                        className="w-full text-center p-3 text-sm font-bold text-[var(--color-brand-primary)] hover:bg-[var(--color-brand-primary)]/10 rounded-xl transition-colors"
+                      >
+                        View all results for "{query}"
+                      </button>
+                    </li>
+                  )}
                 </ul>
               )}
 

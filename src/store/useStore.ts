@@ -23,6 +23,8 @@ export interface Product {
   sizes?: string[]; // Array of size strings
   rating?: number;
   gallery?: string[]; // Array of additional image URLs
+  isPublished?: boolean; // Default to true if undefined
+  createdAt?: string;
 }
 
 interface CartItem extends Product {
@@ -37,6 +39,38 @@ export interface Review {
   comment: string;
   date: string;
   approved: boolean;
+}
+
+export interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  password?: string;
+  role: 'super_admin' | 'staff';
+  status: 'active' | 'suspended';
+}
+
+export interface InviteToken {
+  token: string;
+  role: 'super_admin' | 'staff';
+  used: boolean;
+  createdAt: string;
+}
+
+export interface ActivityLog {
+  id: string;
+  adminId: string;
+  adminName: string;
+  action: string;
+  target: string;
+  details?: string;
+  timestamp: string;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  subcategories: string[];
 }
 
 interface StoreState {
@@ -70,6 +104,32 @@ interface StoreState {
   addReview: (review: Omit<Review, 'id' | 'date' | 'approved'>) => void;
   approveReview: (id: string) => void;
   deleteReview: (id: string) => void;
+
+  // Category Actions
+  categories: Category[];
+  addCategory: (category: Category) => void;
+  updateCategory: (id: string, updates: Partial<Category>) => void;
+  deleteCategory: (id: string) => void;
+
+  // Admin & Staff Actions
+  admins: AdminUser[];
+  currentAdmin: AdminUser | null;
+  activityLogs: ActivityLog[];
+  inviteTokens: InviteToken[];
+  
+  loginAdmin: (user: AdminUser) => void;
+  logoutAdmin: () => void;
+  generateInvite: (role: 'super_admin' | 'staff') => Promise<string>;
+  validateAndUseInvite: (token: string, newAdminData: Omit<AdminUser, 'id' | 'status' | 'role'>) => Promise<boolean>;
+  addAdmin: (admin: Omit<AdminUser, 'id' | 'status'>) => void;
+  updateAdmin: (id: string, updates: Partial<AdminUser>) => void;
+  deleteAdmin: (id: string) => void;
+  approveAdmin: (id: string) => void;
+  suspendAdmin: (id: string) => void;
+  activateAdmin: (id: string) => void;
+  
+  logActivity: (action: string, target: string, details?: string) => void;
+  syncWithDB: () => Promise<void>;
 }
 
 const INITIAL_PRODUCTS: Product[] = [
@@ -242,23 +302,305 @@ export const useStore = create<StoreState>()(
       cart: [],
       wishlist: [],
       reviews: [],
+      admins: [
+        { id: "admin_1", name: "Super Admin", email: "admin@ecw.lk", password: "admin", role: "super_admin", status: "active" },
+        { id: "admin_2", name: "Staff Member", email: "staff@ecw.lk", password: "staff", role: "staff", status: "active" }
+      ],
+      currentAdmin: null,
+      activityLogs: [],
+      inviteTokens: [],
+      categories: [],
 
       setUser: (user) => set({ user }),
       logout: () => set({ user: null }),
 
-      addProduct: (product) => set((state) => ({
-        products: [...state.products, product]
-      })),
+      // Internal helper to log activity
+      logActivity: async (action: string, target: string, details?: string) => {
+        const { currentAdmin, activityLogs } = get();
+        if (!currentAdmin) return;
+        
+        const newLog: ActivityLog = {
+          id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+          adminId: currentAdmin.id,
+          adminName: currentAdmin.name,
+          action,
+          target,
+          details,
+          timestamp: new Date().toISOString()
+        };
+        
+        set({ activityLogs: [newLog, ...activityLogs].slice(0, 500) });
+        
+        try {
+          await fetch('/api/activity', { method: 'POST', body: JSON.stringify(newLog) });
+        } catch (error) { console.error("Error saving log to DB", error); }
+      },
 
-      updateProduct: (id, updates) => set((state) => ({
-        products: state.products.map(p => p.id === id ? { ...p, ...updates } : p)
-      })),
+      loginAdmin: (admin) => {
+        set({ currentAdmin: admin });
+        get().logActivity('User Login', admin.email, 'Logged into the system');
+      },
+      
+      logoutAdmin: () => set({ currentAdmin: null }),
+      
+      generateInvite: async (role) => {
+        const token = `inv_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const newInvite: InviteToken = { token, role, used: false, createdAt: new Date().toISOString() };
+        try {
+          const res = await fetch('/api/invites', { method: 'POST', body: JSON.stringify(newInvite) });
+          if (!res.ok) {
+            console.error("Failed to save invite to DB");
+            return '';
+          }
+          set((state) => ({
+            inviteTokens: [...state.inviteTokens, newInvite]
+          }));
+        } catch (error) { 
+          console.error("Error saving invite to DB", error); 
+          return '';
+        }
+        
+        get().logActivity('Generated Invite Link', `For Role: ${role}`);
+        return token;
+      },
 
-      deleteProduct: (id) => set((state) => ({
-        products: state.products.filter(p => p.id !== id),
-        cart: state.cart.filter(c => c.id !== id),
-        wishlist: state.wishlist.filter(w => w.id !== id)
-      })),
+      validateAndUseInvite: async (token, newAdminData) => {
+        try {
+          const res = await fetch('/api/admin/invite/accept', { 
+            method: 'POST', 
+            body: JSON.stringify({ token, ...newAdminData }) 
+          });
+
+          if (!res.ok) {
+            const data = await res.json();
+            console.error("Failed to accept invite:", data.message);
+            return false;
+          }
+
+          const { admin } = await res.json();
+          const { admins, inviteTokens } = get();
+
+          set({
+            admins: [...admins, admin],
+            inviteTokens: inviteTokens.map(i => i.token === token ? { ...i, used: true } : i)
+          });
+          
+          return true;
+        } catch (error) { 
+          console.error("Error saving invite use to DB", error); 
+          return false;
+        }
+      },
+
+      addAdmin: async (admin) => {
+        const newAdmin: AdminUser = { ...admin, id: `admin_${Date.now()}`, status: 'active' };
+        set((state) => ({ admins: [...state.admins, newAdmin] }));
+        
+        try {
+          await fetch('/api/admins', { method: 'POST', body: JSON.stringify(newAdmin) });
+        } catch (error) { console.error("Error saving admin to DB", error); }
+        
+        get().logActivity('Added New Staff', admin.name);
+      },
+      
+      updateAdmin: async (id, updates) => {
+        const oldAdmin = get().admins.find(a => a.id === id);
+        set((state) => ({
+          admins: state.admins.map(a => a.id === id ? { ...a, ...updates } : a),
+          currentAdmin: state.currentAdmin?.id === id ? { ...state.currentAdmin, ...updates } : state.currentAdmin
+        }));
+
+        try {
+          await fetch('/api/admins', { method: 'PUT', body: JSON.stringify({ id, ...updates }) });
+        } catch (error) { console.error("Error updating admin in DB", error); }
+
+        if (oldAdmin) {
+          const changes: string[] = [];
+          if (updates.role && updates.role !== oldAdmin.role) changes.push(`Role changed to ${updates.role}`);
+          if (updates.status && updates.status !== oldAdmin.status) changes.push(`Status changed to ${updates.status}`);
+          if (updates.name && updates.name !== oldAdmin.name) changes.push(`Name changed to ${updates.name}`);
+          
+          if (changes.length > 0) {
+            get().logActivity('Updated Staff Profile', oldAdmin.name, changes.join(' | '));
+          }
+        }
+      },
+      
+      deleteAdmin: async (id) => {
+        const aName = get().admins.find(a => a.id === id)?.name || id;
+        set((state) => ({
+          admins: state.admins.filter(a => a.id !== id)
+        }));
+        
+        try {
+          await fetch('/api/admins', { method: 'DELETE', body: JSON.stringify({ id }) });
+        } catch (error) { console.error("Error deleting admin from DB", error); }
+        
+        get().logActivity('Deleted Staff Account', aName);
+      },
+
+      approveAdmin: async (id) => {
+        const aName = get().admins.find(a => a.id === id)?.name || id;
+        set((state) => ({
+          admins: state.admins.map(a => a.id === id ? { ...a, status: 'active' } : a)
+        }));
+        
+        try {
+          await fetch('/api/admins', { method: 'PUT', body: JSON.stringify({ id, status: 'active' }) });
+        } catch (error) { console.error("Error approving admin in DB", error); }
+        
+        get().logActivity('Activated Staff Account', aName);
+      },
+
+      suspendAdmin: async (id) => {
+        const aName = get().admins.find(a => a.id === id)?.name || id;
+        set((state) => ({
+          admins: state.admins.map(a => a.id === id ? { ...a, status: 'suspended' } : a)
+        }));
+        
+        try {
+          await fetch('/api/admins', { method: 'PUT', body: JSON.stringify({ id, status: 'suspended' }) });
+        } catch (error) { console.error("Error suspending admin in DB", error); }
+        
+        get().logActivity('Suspended Staff Account', aName);
+      },
+
+      activateAdmin: async (id) => {
+        const aName = get().admins.find(a => a.id === id)?.name || id;
+        set((state) => ({
+          admins: state.admins.map(a => a.id === id ? { ...a, status: 'active' } : a)
+        }));
+        
+        try {
+          await fetch('/api/admins', { method: 'PUT', body: JSON.stringify({ id, status: 'active' }) });
+        } catch (error) { console.error("Error activating admin in DB", error); }
+        
+        get().logActivity('Reactivated Staff Account', aName);
+      },
+
+      syncWithDB: async () => {
+        try {
+          const [productsRes, adminsRes, activityLogsRes, invitesRes, categoriesRes, reviewsRes] = await Promise.all([
+            fetch('/api/products').catch(() => null),
+            fetch('/api/admins').catch(() => null),
+            fetch('/api/activity').catch(() => null),
+            fetch('/api/invites').catch(() => null),
+            fetch('/api/categories').catch(() => null),
+            fetch('/api/reviews').catch(() => null)
+          ]);
+          
+          const products = productsRes && productsRes.ok ? await productsRes.json() : get().products;
+          const admins = adminsRes && adminsRes.ok ? await adminsRes.json() : get().admins;
+          const activityLogs = activityLogsRes && activityLogsRes.ok ? await activityLogsRes.json() : get().activityLogs;
+          const inviteTokens = invitesRes && invitesRes.ok ? await invitesRes.json() : get().inviteTokens;
+          const categories = categoriesRes && categoriesRes.ok ? await categoriesRes.json() : get().categories;
+          const fetchedReviews = reviewsRes && reviewsRes.ok ? await reviewsRes.json() : []; // only load approved ones from API for public
+          
+          set({ products, admins, activityLogs, inviteTokens, categories, reviews: fetchedReviews });
+        } catch (error) {
+          console.error("Failed to sync with DB", error);
+        }
+      },
+
+      addCategory: async (category) => {
+        set((state) => ({ categories: [...state.categories, category] }));
+        try {
+          await fetch('/api/categories', { method: 'POST', body: JSON.stringify(category) });
+        } catch (error) { console.error("Error saving category to DB", error); }
+        get().logActivity('Created Category', category.name);
+      },
+
+      updateCategory: async (id, updates) => {
+        const oldCat = get().categories.find(c => c.id === id);
+        const cName = oldCat?.name || id;
+        
+        set((state) => ({
+          categories: state.categories.map(c => c.id === id ? { ...c, ...updates } : c)
+        }));
+        
+        try {
+          await fetch('/api/categories', { method: 'PUT', body: JSON.stringify({ id, ...updates }) });
+        } catch (error) { console.error("Error updating category in DB", error); }
+        
+        get().logActivity('Updated Category', cName);
+      },
+
+      deleteCategory: async (id) => {
+        const cName = get().categories.find(c => c.id === id)?.name || id;
+        set((state) => ({
+          categories: state.categories.filter(c => c.id !== id)
+        }));
+        
+        try {
+          await fetch('/api/categories', { method: 'DELETE', body: JSON.stringify({ id }) });
+        } catch (error) { console.error("Error deleting category from DB", error); }
+        
+        get().logActivity('Deleted Category', cName);
+      },
+
+      addProduct: async (product) => {
+        set((state) => ({ products: [...state.products, product] }));
+        try {
+          await fetch('/api/products', { method: 'POST', body: JSON.stringify(product) });
+        } catch (error) { console.error("Error saving product to DB", error); }
+        get().logActivity('Created Product', product.name);
+      },
+
+      updateProduct: async (id, updates) => {
+        const oldProduct = get().products.find(p => p.id === id);
+        const pName = oldProduct?.name || id;
+        
+        let details = '';
+        if (oldProduct) {
+          const changes: string[] = [];
+          if (updates.price && updates.price !== oldProduct.price) {
+            changes.push(`Price changed from Rs. ${oldProduct.price.toLocaleString()} to Rs. ${updates.price.toLocaleString()}`);
+          }
+          if (updates.stock !== undefined && updates.stock !== oldProduct.stock) {
+            changes.push(`Stock changed from ${oldProduct.stock} to ${updates.stock}`);
+          }
+          if (updates.name && updates.name !== oldProduct.name) {
+            changes.push(`Name changed to "${updates.name}"`);
+          }
+          if (updates.category && updates.category !== oldProduct.category) {
+            changes.push(`Category changed to "${updates.category}"`);
+          }
+          if (updates.brand && updates.brand !== oldProduct.brand) {
+            changes.push(`Brand changed to "${updates.brand}"`);
+          }
+          
+          if (changes.length > 0) {
+            details = changes.join(' | ');
+          } else {
+            details = 'Updated minor details (e.g. description or image)';
+          }
+        }
+
+        set((state) => ({
+          products: state.products.map(p => p.id === id ? { ...p, ...updates } : p)
+        }));
+        
+        try {
+          await fetch('/api/products', { method: 'PUT', body: JSON.stringify({ id, ...updates }) });
+        } catch (error) { console.error("Error updating product in DB", error); }
+        
+        get().logActivity('Updated Product', pName, details);
+      },
+
+      deleteProduct: async (id) => {
+        const pName = get().products.find(p => p.id === id)?.name || id;
+        set((state) => ({
+          products: state.products.filter(p => p.id !== id),
+          cart: state.cart.filter(c => c.id !== id),
+          wishlist: state.wishlist.filter(w => w.id !== id)
+        }));
+        
+        try {
+          await fetch('/api/products', { method: 'DELETE', body: JSON.stringify({ id }) });
+        } catch (error) { console.error("Error deleting product from DB", error); }
+        
+        get().logActivity('Deleted Product', pName);
+      },
 
       addToCart: (product) => set((state) => {
         const existingItem = state.cart.find((item) => item.id === product.id);
@@ -292,17 +634,19 @@ export const useStore = create<StoreState>()(
         return { wishlist: [...state.wishlist, product] };
       }),
 
-      addReview: (review) => set((state) => ({
-        reviews: [
-          ...state.reviews,
-          {
-            ...review,
-            id: `r_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-            date: new Date().toISOString(),
-            approved: false
+      addReview: async (review) => {
+        try {
+          const res = await fetch('/api/reviews', { method: 'POST', body: JSON.stringify(review) });
+          if (res.ok) {
+            const data = await res.json();
+            set((state) => ({
+              reviews: [...state.reviews, data.review]
+            }));
           }
-        ]
-      })),
+        } catch (error) {
+          console.error("Error saving review to DB", error);
+        }
+      },
 
       approveReview: (id) => set((state) => ({
         reviews: state.reviews.map(r => r.id === id ? { ...r, approved: true } : r)

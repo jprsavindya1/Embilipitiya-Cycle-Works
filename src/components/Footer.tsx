@@ -1,9 +1,24 @@
-import React from "react";
+"use client";
+
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Bike } from "lucide-react";
 import { FaFacebook, FaInstagram, FaTiktok } from "react-icons/fa";
 
 export function Footer() {
+  const [storeEmail, setStoreEmail] = useState("embilipitiyacycleworks911@gmail.com");
+
+  useEffect(() => {
+    fetch('/api/settings/public')
+      .then(res => res.json())
+      .then(data => {
+        if (data.settings?.contact_email) {
+          setStoreEmail(data.settings.contact_email);
+        }
+      })
+      .catch(console.error);
+  }, []);
+  
   return (
     <footer className="bg-zinc-950 text-zinc-300 pt-8 pb-8 border-t border-zinc-800">
       <div className="container mx-auto px-4">
@@ -62,7 +77,9 @@ export function Footer() {
               </div>
               <div>
                 <strong className="block text-white mb-1">Email:</strong>
-                info@ebilipitiyacycleworks.com
+                <a href={`mailto:${storeEmail}`} className="hover:text-white transition-colors duration-200">
+                  {storeEmail}
+                </a>
               </div>
             </div>
 

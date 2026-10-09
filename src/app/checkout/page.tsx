@@ -19,6 +19,12 @@ export default function CheckoutPage() {
   const [error, setError] = useState("");
   const [payhereData, setPayhereData] = useState<any>(null);
 
+  // Promo Code State
+  const [promoCodeInput, setPromoCodeInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<any>(null);
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState("");
+
   // Form State
   const [contact, setContact] = useState({ email: "", phone: "" });
   const [address, setAddress] = useState({ 
@@ -31,7 +37,33 @@ export default function CheckoutPage() {
   const subtotal = getCartTotal();
   // Assume delivery fee was passed or default to 1500 for demo
   const deliveryFee = 1500;
-  const total = subtotal + deliveryFee;
+  const discountAmount = appliedPromo ? appliedPromo.discount : 0;
+  const total = subtotal + deliveryFee - discountAmount;
+
+  const applyPromoCode = async () => {
+    setPromoError("");
+    setPromoLoading(true);
+    try {
+      const res = await fetch("/api/checkout/apply-promo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: promoCodeInput, cartTotal: subtotal }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      setAppliedPromo(data);
+    } catch (err: any) {
+      setPromoError(err.message);
+    } finally {
+      setPromoLoading(false);
+    }
+  };
+
+  const removePromoCode = () => {
+    setAppliedPromo(null);
+    setPromoCodeInput("");
+    setPromoError("");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,6 +82,8 @@ export default function CheckoutPage() {
           cart,
           subtotal,
           deliveryFee,
+          discount: discountAmount,
+          promoCode: appliedPromo ? appliedPromo.code : null,
           total
         }),
       });
@@ -256,6 +290,32 @@ export default function CheckoutPage() {
                 ))}
               </div>
 
+              {/* Promo Code */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium mb-2">Have a Promo Code?</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="Enter code" 
+                    value={promoCodeInput}
+                    onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
+                    disabled={!!appliedPromo}
+                    className="flex-grow px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-transparent focus:ring-2 focus:ring-[var(--color-brand-primary)] outline-none uppercase font-mono text-sm"
+                  />
+                  {!appliedPromo ? (
+                    <Button type="button" onClick={applyPromoCode} disabled={!promoCodeInput || promoLoading} className="shrink-0">
+                      {promoLoading ? "..." : "Apply"}
+                    </Button>
+                  ) : (
+                    <Button type="button" onClick={removePromoCode} variant="outline" className="shrink-0 text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-900/20 dark:border-red-900/50">
+                      Remove
+                    </Button>
+                  )}
+                </div>
+                {promoError && <p className="text-red-500 text-xs mt-2">{promoError}</p>}
+                {appliedPromo && <p className="text-green-600 text-xs mt-2 font-medium">Promo code '{appliedPromo.code}' applied!</p>}
+              </div>
+
               <div className="space-y-3 mb-6 pt-6 border-t border-zinc-100 dark:border-zinc-800">
                 <div className="flex justify-between text-zinc-600 dark:text-zinc-400">
                   <span>Subtotal</span>
@@ -265,6 +325,12 @@ export default function CheckoutPage() {
                   <span>Delivery</span>
                   <span>Rs. {deliveryFee.toLocaleString()}</span>
                 </div>
+                {appliedPromo && (
+                  <div className="flex justify-between text-green-600 font-medium">
+                    <span>Discount ({appliedPromo.code})</span>
+                    <span>- Rs. {appliedPromo.discount.toLocaleString()}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-xl font-black pt-3 border-t border-zinc-100 dark:border-zinc-800 text-zinc-900 dark:text-white">
                   <span>Total</span>
                   <span className="text-[var(--color-brand-primary)]">Rs. {total.toLocaleString()}</span>

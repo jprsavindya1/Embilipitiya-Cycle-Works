@@ -35,12 +35,30 @@ const fadeIn = {
 };
 
 export default function Home() {
-  const { products } = useStore();
+  const { products, syncWithDB } = useStore();
   
-  const mappedProducts = products.map(p => ({
-    ...p,
-    category: mainCategoryMap[p.category] || p.category
-  }));
+  React.useEffect(() => {
+    syncWithDB();
+  }, [syncWithDB]);
+  
+  const mappedProducts = products
+    .filter(p => p.isPublished !== false)
+    .map(p => ({
+      ...p,
+      category: mainCategoryMap[p.category] || p.category
+    }))
+    .sort((a, b) => {
+      // Prioritize isNew
+      if (a.isNew && !b.isNew) return -1;
+      if (!a.isNew && b.isNew) return 1;
+      
+      // Then prioritize newest first by createdAt if available
+      if (a.createdAt && b.createdAt) {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+      return 0;
+    })
+    .slice(0, 15); // Show top 15 in the carousel
   
   return (
     <div className="flex flex-col min-h-screen">

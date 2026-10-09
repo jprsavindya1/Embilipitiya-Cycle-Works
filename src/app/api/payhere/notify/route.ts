@@ -50,6 +50,35 @@ export async function POST(request: Request) {
           `UPDATE orders SET payment_status = ? WHERE id = ?`,
           [paymentStatus, dbOrderId]
         );
+
+        // Send confirmation email if paid
+        if (paymentStatus === 'Paid') {
+          const [orderRows]: any = await connection.execute('SELECT * FROM orders WHERE id = ?', [dbOrderId]);
+          if (orderRows.length > 0) {
+            const order = orderRows[0];
+            const { sendEmail } = require('@/lib/email');
+            try {
+              await sendEmail({
+              to: order.email,
+              subject: `Payment Received & Order Confirmation - #ORD-${order.id}`,
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                  <h2 style="color: #0d9488;">Payment Successful!</h2>
+                  <p>Hi ${order.first_name},</p>
+                  <p>We have successfully received your payment of Rs. ${parseFloat(order.total).toFixed(2)} via PayHere.</p>
+                  <p>Your order <strong>#ORD-${order.id}</strong> is now confirmed and we will begin processing it right away.</p>
+                  <p>You can track the status of your order by visiting our website.</p>
+                  <br/>
+                  <p>Best regards,<br/>Embilipitiya Cycle Works</p>
+                </div>
+              `
+              });
+            } catch (emailErr) {
+              console.error('Failed to send payment confirmation email:', emailErr);
+            }
+          }
+        }
+
       } finally {
         connection.release();
       }

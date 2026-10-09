@@ -223,6 +223,31 @@ export default function OrderTrackingPage({ params }: { params: Promise<{ id: st
                   {order.address_line2 && <div>{order.address_line2}</div>}
                   <div>{order.city}, {order.postal_code}</div>
                 </div>
+                
+                {(order.courier || order.tracking_number) && (
+                  <div className="pt-2 mt-2 border-t border-zinc-100 dark:border-zinc-800">
+                    <div className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Tracking Information</div>
+                    {order.courier && (
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-sm">Courier:</span>
+                        <span className="font-bold text-zinc-900 dark:text-white">{order.courier}</span>
+                      </div>
+                    )}
+                    {order.tracking_number && (
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm">Tracking Number:</span>
+                        <span className="font-bold text-zinc-900 dark:text-white">{order.tracking_number}</span>
+                      </div>
+                    )}
+                    {order.tracking_link && (
+                      <div className="mt-4 text-center">
+                        <a href={order.tracking_link} target="_blank" rel="noreferrer" className="inline-block bg-[var(--color-brand-primary)] text-white font-bold py-2 px-6 rounded-lg text-sm hover:bg-[var(--color-brand-primary-dark)] transition-colors w-full text-center">
+                          Track on Courier Website
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -258,8 +283,8 @@ export default function OrderTrackingPage({ params }: { params: Promise<{ id: st
                 <div className="capitalize font-medium">
                   {order.payment_method === 'cod' ? 'Cash on Delivery' : order.payment_method === 'bank' ? 'Bank Transfer' : order.payment_method}
                 </div>
-                <div className={`mt-2 inline-flex px-3 py-1 rounded-full text-xs font-bold ${order.payment_status === 'Paid' ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400' : (order.payment_slip_url || uploadSuccess) ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400'}`}>
-                  Status: {order.payment_status === 'Pending' && (order.payment_slip_url || uploadSuccess) ? 'Slip Uploaded' : order.payment_status}
+                <div className={`mt-2 inline-flex px-3 py-1 rounded-full text-xs font-bold ${order.payment_status === 'Paid' ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400' : (order.payment_slip_url || uploadSuccess) ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400' : (order.payment_method === 'cod' && order.payment_status === 'Pending') ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400'}`}>
+                  Status: {order.payment_status === 'Pending' && (order.payment_slip_url || uploadSuccess) ? 'Slip Uploaded' : (order.payment_method === 'cod' && order.payment_status === 'Pending') ? 'Confirmed' : order.payment_status}
                 </div>
                 
               </div>
